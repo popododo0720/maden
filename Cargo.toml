@@ -1,0 +1,21 @@
+[workspace]
+members = ["maden-config", "maden-core", "maden-macros"]
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+actix-web = "4"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9.0"
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+
+[package]
+name = "maden"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+maden-config = { path = "./maden-config" }
+maden-core = { path = "./maden-core" }
+maden-macros = { path = "./maden-macros" }
+tokio = { workspace = true }

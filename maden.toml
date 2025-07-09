@@ -1,0 +1,11 @@
+[server]
+ip = "0.0.0.0"
+port = 5555
+
+[database]
+type = "PostgreSQL"
+ip = "localhost"
+port = 5432
+user = "dbadmin"
+password = "dbadminpass"
+database = "alicedb"
