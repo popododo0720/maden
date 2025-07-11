@@ -10,6 +10,13 @@ pub struct Config {
 pub struct Server {
     pub ip: String,
     pub port: u16,
+    pub ssl: Option<SslConfig>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct SslConfig {
+    pub cert_path: String,
+    pub key_path: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -2,6 +2,10 @@
 ip = "0.0.0.0"
 port = 5555
 
+[server.ssl]
+cert_path = "ssl/cert.pem"
+key_path = "ssl/key.pem"
+
 [database]
 type = "PostgreSQL"
 ip = "localhost"
