@@ -35,7 +35,7 @@ impl Service<HyperRequest<Incoming>> for MadenService {
         let path = hyper_req.uri().path().to_string();
         let query_string = hyper_req.uri().query().map(|s| s.to_string());
 
-        maden_log::info!("Incoming request: {:?} {}", method, path);
+        maden_log::info!("Incoming request: {method:?} {path}");
 
         let routes = self.routes.lock().unwrap();
         let mut matched_handler: Option<Arc<Handler>> = None;
@@ -85,7 +85,7 @@ impl Service<HyperRequest<Incoming>> for MadenService {
                                 .collect();
 
                             if let Some(actual_value) = req_query_params.get(key) {
-                                expected_value.as_ref().map_or(true, |ev| actual_value.as_ref().map_or(false, |av| av == ev))
+                                expected_value.as_ref().is_none_or(|ev| actual_value.as_ref() == Some(ev))
                             } else {
                                 false
                             }

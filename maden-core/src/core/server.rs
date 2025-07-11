@@ -39,7 +39,7 @@ impl Maden {
         let listener = match TcpListener::bind(addr).await {
             Ok(l) => l,
             Err(e) => {
-                maden_log::error!("Failed to bind to address {}: {}", addr, e);
+                maden_log::error!("Failed to bind to address {addr}: {e}");
                 return;
             }
         };
@@ -49,14 +49,14 @@ impl Maden {
                 let certs = match load_certs(std::path::Path::new(&ssl_config.cert_path)) {
                     Ok(c) => c,
                     Err(e) => {
-                        maden_log::error!("Failed to load certificates: {}", e);
+                        maden_log::error!("Failed to load certificates: {e}");
                         return;
                     }
                 };
                 let key = match load_private_key(std::path::Path::new(&ssl_config.key_path)) {
                     Ok(k) => k,
                     Err(e) => {
-                        maden_log::error!("Failed to load private key: {}", e);
+                        maden_log::error!("Failed to load private key: {e}");
                         return;
                     }
                 };
@@ -66,7 +66,7 @@ impl Maden {
                     .with_single_cert(certs, key) {
                         Ok(c) => c,
                         Err(e) => {
-                            maden_log::error!("Failed to create rustls config: {}", e);
+                            maden_log::error!("Failed to create rustls config: {e}");
                             return;
                         }
                     };
@@ -87,7 +87,7 @@ impl Maden {
             let (stream, _peer_addr) = match listener.accept().await {
                 Ok(s) => s,
                 Err(e) => {
-                    maden_log::error!("Failed to accept connection: {}", e);
+                    maden_log::error!("Failed to accept connection: {e}");
                     continue;
                 }
             };

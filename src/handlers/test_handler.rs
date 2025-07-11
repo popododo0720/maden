@@ -16,13 +16,13 @@ impl TestHandler {
     #[get("/")]
     pub async fn hello_world(_req: Request) -> Result<String, MadenError> {
         println!("/");
-        Ok(format!("GET / received! This is a new line from hello_world."))
+        Ok("GET / received! This is a new line from hello_world.".to_string())
     }
 
     #[get("/test")]
     pub async fn get_test(_req: Request) -> Result<String, MadenError> {
         println!("/test");
-        Ok(format!("GET /test received! Another line for test."))
+        Ok("GET /test received! Another line for test.".to_string())
     }
 
     #[get("/test/:id")]
@@ -69,15 +69,15 @@ impl TestHandler {
     pub async fn error_example(_req: Request) -> Result<MyData, MadenError> {
         println!("/error-example");
         // 400 Bad Request 에러 반환 예시
-        if _req.query_params.get("type").map_or(false, |s| s == "bad") {
+        if _req.query_params.get("type").is_some_and(|s| s == "bad") {
             return Err(MadenError::bad_request("Invalid request parameter."));
         }
         // 401 Unauthorized 에러 반환 예시
-        if _req.query_params.get("type").map_or(false, |s| s == "unauthorized") {
+        if _req.query_params.get("type").is_some_and(|s| s == "unauthorized") {
             return Err(MadenError::unauthorized("Authentication required."));
         }
         // 500 Internal Server Error 반환 예시
-        if _req.query_params.get("type").map_or(false, |s| s == "internal") {
+        if _req.query_params.get("type").is_some_and(|s| s == "internal") {
             return Err(MadenError::internal_server_error("Something went wrong on the server."));
         }
 
