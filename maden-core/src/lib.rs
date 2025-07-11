@@ -1,6 +1,7 @@
 pub mod core;
 
-pub use core::http::{HttpMethod, Request, Response, IntoResponse, Json, RoutePattern};
+pub use core::http::{HttpMethod, Request, Response, IntoResponse, RoutePattern};
+pub use core::error::MadenError;
 pub use core::server::Maden;
 pub use maden_macros::handler;
 

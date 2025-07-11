@@ -1,13 +1,13 @@
-use maden_macros::{handler};
-use maden_core::{Request, IntoResponse};
+use maden_macros::{handler, get};
+use maden_core::{Request, MadenError};
 
 pub struct TmpHandler;
 
 #[handler]
 impl TmpHandler {
     #[get("/tmp")]
-    pub async fn gettmp(_req: Request) -> impl IntoResponse {
+    pub async fn get_tmp(_req: Request) -> Result<String, MadenError> {
         println!("/tmp");
-        "Hello from TmpHandler!"
+        Ok("Hello from TmpHandler!".to_string())
     }
 }

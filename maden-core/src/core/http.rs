@@ -1,4 +1,6 @@
 use std::collections::{HashMap, BTreeMap};
+use hyper::body::Bytes;
+use http_body_util::Full;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HttpMethod {
@@ -115,23 +117,17 @@ impl IntoResponse for Response {
     }
 }
 
-impl IntoResponse for String {
-    fn into_response(self) -> Response {
-        Response::new(200).text(&self)
-    }
-}
 
-impl IntoResponse for &'static str {
-    fn into_response(self) -> Response {
-        Response::new(200).text(self)
-    }
-}
 
-pub struct Json<T>(pub T);
-
-impl<T: serde::Serialize> IntoResponse for Json<T> {
-    fn into_response(self) -> Response {
-        Response::new(200).json(self.0)
+impl From<Response> for hyper::Response<Full<Bytes>> {
+    fn from(maden_res: Response) -> Self {
+        let mut builder = hyper::Response::builder().status(maden_res.status_code);
+        for (key, value) in maden_res.headers {
+            builder = builder.header(key, value);
+        }
+        builder
+            .body(Full::new(Bytes::from(maden_res.body)))
+            .unwrap()
     }
 }
 

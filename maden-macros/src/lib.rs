@@ -89,7 +89,7 @@ pub fn handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let return_type = &method.sig.output;
                 let response_conversion = match return_type {
                     syn::ReturnType::Default => { // -> ()
-                        quote! { ().into_response() }
+                        quote! { Ok(().into_response()) }
                     },
                     syn::ReturnType::Type(_, ty) => { // -> Type
                         if let Type::Path(type_path) = &**ty {
@@ -98,15 +98,45 @@ pub fn handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                             // Check for maden_core::Response, String, &'static str
                             if type_name == "Response" || type_name == "String" || type_name == "str" {
-                                quote! { #struct_name::#method_name(req).await.into_response() }
+                                quote! { Ok(#struct_name::#method_name(req).await.into_response()) }
+                            } else if let Type::Path(type_path) = &**ty {
+                                if type_path.path.segments.last().unwrap().ident == "Result" {
+                                    // Handle Result<T, MadenError>
+                                    // Extract T from Result<T, MadenError>
+                                    let _inner_type = if let syn::PathArguments::AngleBracketed(args) = &type_path.path.segments.last().unwrap().arguments {
+                                        if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                                            inner_ty
+                                        } else {
+                                            panic!("Expected a type argument for Result");
+                                        }
+                                    } else {
+                                        panic!("Expected angle bracketed arguments for Result");
+                                    };
+
+                                    quote! {
+                                        match #struct_name::#method_name(req).await {
+                                            Ok(value) => maden_core::Response::new(200).json(value),
+                                            Err(err) => err.into_response(),
+                                        }
+                                    }
+                                } else if type_path.path.segments.last().unwrap().ident == "Response" {
+                                    quote! { #struct_name::#method_name(req).await }
+                                } else if type_path.path.segments.last().unwrap().ident == "String" {
+                                    quote! { maden_core::Response::new(200).text(&#struct_name::#method_name(req).await) }
+                                } else if type_path.path.segments.last().unwrap().ident == "str" {
+                                    quote! { maden_core::Response::new(200).text(#struct_name::#method_name(req).await) }
+                                } else {
+                                    // Assume it's a serializable type
+                                    quote! { maden_core::Response::new(200).json(#struct_name::#method_name(req).await) }
+                                }
                             } else {
-                                // Assume it's a serializable type and wrap with Json
-                                quote! { maden_core::Json(#struct_name::#method_name(req).await).into_response() }
+                                // Fallback for other complex types or impl Trait
+                                quote! { maden_core::Response::new(200).json(#struct_name::#method_name(req).await) }
                             }
                         } else {
                             // For other complex types (e.g., tuples, arrays),
                             // or impl Trait, fallback to IntoResponse
-                            quote! { #struct_name::#method_name(req).await.into_response() }
+                            quote! { Ok(#struct_name::#method_name(req).await.into_response()) }
                         }
                     }
                 };

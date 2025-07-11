@@ -1,5 +1,5 @@
 use maden_macros::{handler};
-use maden_core::{Request};
+use maden_core::{Request, MadenError};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
@@ -14,35 +14,35 @@ pub struct TestHandler;
 #[handler]
 impl TestHandler {
     #[get("/")]
-    pub async fn hello_world(_req: Request) -> String {
+    pub async fn hello_world(_req: Request) -> Result<String, MadenError> {
         println!("/");
-        format!("GET / received! This is a new line from hello_world.")
+        Ok(format!("GET / received! This is a new line from hello_world."))
     }
 
     #[get("/test")]
-    pub async fn get_test(_req: Request) -> String {
+    pub async fn get_test(_req: Request) -> Result<String, MadenError> {
         println!("/test");
-        format!("GET /test received! Another line for test.")
+        Ok(format!("GET /test received! Another line for test."))
     }
 
     #[get("/test/:id")]
-    pub async fn get_test_id(req: Request) -> String {
+    pub async fn get_test_id(req: Request) -> Result<String, MadenError> {
         let id = req.path_params.get("id").unwrap_or(&"unknown".to_string()).clone();
         println!("/test/:{id}");
-        format!("GET /test/{id} received! ID: {id} Path parameter test.")
+        Ok(format!("GET /test/{id} received! ID: {id} Path parameter test."))
     }
 
     #[post("/test")]
-    pub async fn post_test(req: Request) -> String {
+    pub async fn post_test(req: Request) -> Result<String, MadenError> {
         let body_str = String::from_utf8_lossy(&req.body).to_string();
         println!("/test : {body_str}");
-        format!("POST /test received! Body: {body_str} Body echo test.")
+        Ok(format!("POST /test received! Body: {body_str} Body echo test."))
     }
 
     #[get("/json-example")]
-    pub async fn json_example(_req: Request) -> serde_json::Value {
+    pub async fn json_example(_req: Request) -> Result<serde_json::Value, MadenError> {
         println!("/json-example");
-        serde_json::json!({
+        Ok(serde_json::json!({
             "status": "success",
             "message": "This is a JSON response from Maden.",
             "data": {
@@ -52,16 +52,39 @@ impl TestHandler {
                     "item": "example"
                 }
             }
-        })
+        }))
     }
 
     #[get("/auto-json")]
-    pub async fn auto_json_response(_req: Request) -> MyData {
-        maden_log::info!("auto_json");
-        MyData {
+    pub async fn auto_json_response(_req: Request) -> Result<MyData, MadenError> {
+        println!("/auto-json");
+        Ok(MyData {
             id: 1,
             name: "Auto JSON Test".to_string(),
             active: true,
+        })
+    }
+
+    #[get("/error-example")]
+    pub async fn error_example(_req: Request) -> Result<MyData, MadenError> {
+        println!("/error-example");
+        // 400 Bad Request 에러 반환 예시
+        if _req.query_params.get("type").map_or(false, |s| s == "bad") {
+            return Err(MadenError::bad_request("Invalid request parameter."));
         }
+        // 401 Unauthorized 에러 반환 예시
+        if _req.query_params.get("type").map_or(false, |s| s == "unauthorized") {
+            return Err(MadenError::unauthorized("Authentication required."));
+        }
+        // 500 Internal Server Error 반환 예시
+        if _req.query_params.get("type").map_or(false, |s| s == "internal") {
+            return Err(MadenError::internal_server_error("Something went wrong on the server."));
+        }
+
+        Ok(MyData {
+            id: 2,
+            name: "Error Example Success".to_string(),
+            active: false,
+        })
     }
 }

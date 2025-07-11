@@ -15,6 +15,8 @@ use hyper::{
 
 use crate::core::http::{HttpMethod, Request, Response, RoutePattern};
 use crate::MadenRoutes;
+use crate::MadenError;
+use crate::IntoResponse;
 
 pub type Handler = Box<dyn Fn(Request) -> Pin<Box<dyn Future<Output = Response> + Send>> + Send + Sync>;
 
@@ -136,17 +138,13 @@ impl Service<HyperRequest<Incoming>> for MadenService {
             );
 
             let maden_res = match matched_handler {
-                Some(handler) => handler(maden_req).await,
-                None => Response::new(404).text("Not Found"),
+                Some(handler) => {
+                    handler(maden_req).await
+                },
+                None => MadenError::not_found("Route not found.").into_response(),
             };
 
-            let mut builder = HyperResponse::builder().status(maden_res.status_code);
-            for (key, value) in maden_res.headers {
-                builder = builder.header(key, value);
-            }
-            let hyper_res = builder
-                .body(Full::new(Bytes::from(maden_res.body)))
-                .unwrap();
+            let hyper_res: HyperResponse<Full<Bytes>> = maden_res.into_response().into();
             Ok(hyper_res)
         })
     }
