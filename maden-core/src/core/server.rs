@@ -5,7 +5,7 @@ use std::{
 };
 
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use maden_config::{Config};
+use maden_config::Config;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use rustls::ServerConfig as RustlsServerConfig;
@@ -119,9 +119,8 @@ impl Maden {
                 };
 
                 tokio::task::spawn(async move {
-                    if let Err(err) = hyper::server::conn::http1::Builder::new()
-                        .serve_connection(io, service)
-                        .await
+                    let hyper_service = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+                    if let Err(err) = hyper_service.serve_connection_with_upgrades(io, service).await
                     {
                         maden_log::error!("Error serving connection: {err:?}"); 
                     }
