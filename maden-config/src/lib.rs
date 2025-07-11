@@ -3,6 +3,7 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     pub server: Server,
+    pub ssl: Option<Ssl>,
     pub database: Database,
 }
 
@@ -10,11 +11,11 @@ pub struct Config {
 pub struct Server {
     pub ip: String,
     pub port: u16,
-    pub ssl: Option<SslConfig>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct SslConfig {
+pub struct Ssl {
+    pub tls: bool,
     pub cert_path: String,
     pub key_path: String,
 }

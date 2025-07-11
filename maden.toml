@@ -2,7 +2,8 @@
 ip = "0.0.0.0"
 port = 5555
 
-[server.ssl]
+[ssl]
+tls = true # 이 옵션에 따라 HTTP/HTTPS 결정
 cert_path = "ssl/cert.pem"
 key_path = "ssl/key.pem"
 

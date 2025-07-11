@@ -189,7 +189,7 @@ pub fn application(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 (factory.0)(&mut maden);
             }
 
-            maden.run(config.server).await;
+            maden.run(config).await;
         }
     };
 

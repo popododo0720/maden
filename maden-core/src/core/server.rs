@@ -5,7 +5,7 @@ use std::{
 };
 
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use maden_config::Server as ServerConfig;
+use maden_config::{Config};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use rustls::ServerConfig as RustlsServerConfig;
@@ -34,8 +34,8 @@ impl Maden {
         path_map.insert(route_pattern, Arc::new(handler));
     }
 
-    pub async fn run(self, config: ServerConfig) {
-        let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    pub async fn run(self, config: Config) {
+        let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
         let listener = match TcpListener::bind(addr).await {
             Ok(l) => l,
             Err(e) => {
@@ -45,34 +45,38 @@ impl Maden {
         };
 
         let tls_acceptor = if let Some(ssl_config) = config.ssl {
-            let certs = match load_certs(std::path::Path::new(&ssl_config.cert_path)) {
-                Ok(c) => c,
-                Err(e) => {
-                    maden_log::error!("Failed to load certificates: {}", e);
-                    return;
-                }
-            };
-            let key = match load_private_key(std::path::Path::new(&ssl_config.key_path)) {
-                Ok(k) => k,
-                Err(e) => {
-                    maden_log::error!("Failed to load private key: {}", e);
-                    return;
-                }
-            };
-
-            let mut rustls_config = match RustlsServerConfig::builder()
-                .with_no_client_auth()
-                .with_single_cert(certs, key) {
+            if ssl_config.tls {
+                let certs = match load_certs(std::path::Path::new(&ssl_config.cert_path)) {
                     Ok(c) => c,
                     Err(e) => {
-                        maden_log::error!("Failed to create rustls config: {}", e);
+                        maden_log::error!("Failed to load certificates: {}", e);
+                        return;
+                    }
+                };
+                let key = match load_private_key(std::path::Path::new(&ssl_config.key_path)) {
+                    Ok(k) => k,
+                    Err(e) => {
+                        maden_log::error!("Failed to load private key: {}", e);
                         return;
                     }
                 };
 
-            rustls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+                let mut rustls_config = match RustlsServerConfig::builder()
+                    .with_no_client_auth()
+                    .with_single_cert(certs, key) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            maden_log::error!("Failed to create rustls config: {}", e);
+                            return;
+                        }
+                    };
 
-            Some(TlsAcceptor::from(Arc::new(rustls_config)))
+                rustls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+                Some(TlsAcceptor::from(Arc::new(rustls_config)))
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -89,6 +93,7 @@ impl Maden {
             };
             
             if let Some(acceptor) = &tls_acceptor {
+                // HTTPS connection
                 let service = MadenService {
                     routes: self.routes.clone(),
                 };
@@ -107,7 +112,7 @@ impl Maden {
                     }
                 });
             } else {
-                // Handle plain HTTP connection
+                // HTTP connection
                 let io = TokioIo::new(stream);
                 let service = MadenService {
                     routes: self.routes.clone(),

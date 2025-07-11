@@ -2,7 +2,7 @@ pub mod core;
 
 pub use core::http::{HttpMethod, Request, Response, IntoResponse, RoutePattern};
 pub use core::error::MadenError;
-pub use core::server::Maden;
+pub use crate::core::server::Maden;
 pub use maden_macros::handler;
 
 pub struct HandlerFactory(pub fn(&mut Maden));
