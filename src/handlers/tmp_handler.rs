@@ -1,4 +1,4 @@
-use maden_macros::{handler, get};
+use maden_macros::{handler};
 use maden_core::{Request, MadenError};
 
 pub struct TmpHandler;
