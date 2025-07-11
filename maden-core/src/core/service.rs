@@ -33,6 +33,8 @@ impl Service<HyperRequest<Incoming>> for MadenService {
         let path = hyper_req.uri().path().to_string();
         let query_string = hyper_req.uri().query().map(|s| s.to_string());
 
+        maden_log::info!("Incoming request: {:?} {}", method, path);
+
         let routes = self.routes.lock().unwrap();
         let mut matched_handler: Option<Arc<Handler>> = None;
         let mut extracted_params: HashMap<String, String> = HashMap::new();
@@ -122,6 +124,15 @@ impl Service<HyperRequest<Incoming>> for MadenService {
                 extracted_params,
                 query_params,
                 body_bytes.to_vec(),
+            );
+
+            maden_log::debug!("Request details: {{ method: {:?}, path: {:?}, headers: {:?}, path_params: {:?}, query_params: {:?}, body_len: {} }}",
+                maden_req.method,
+                maden_req.path,
+                maden_req.headers,
+                maden_req.path_params,
+                maden_req.query_params,
+                maden_req.body.len()
             );
 
             let maden_res = match matched_handler {
