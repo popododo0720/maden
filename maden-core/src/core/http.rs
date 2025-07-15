@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::HashMap;
 use hyper::body::Bytes;
 use http_body_util::Full;
 
@@ -131,26 +131,4 @@ impl From<Response> for hyper::Response<Full<Bytes>> {
     }
 }
 
-pub type QueryConditions = BTreeMap<String, Option<String>>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RoutePattern {
-    pub path: String,
-    pub query_conditions: QueryConditions,
-}
-
-impl RoutePattern {
-    pub fn new(path: String, query_string: Option<String>) -> Self {
-        let mut query_conditions = BTreeMap::new();
-        if let Some(qs) = query_string {
-            for pair in qs.split("&") {
-                let mut parts = pair.splitn(2, '=');
-                if let Some(key) = parts.next() {
-                    let value = parts.next();
-                    query_conditions.insert(key.to_string(), value.map(|s| s.to_string()));
-                }
-            }
-        }
-        Self { path, query_conditions }
-    }
-}

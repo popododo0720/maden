@@ -25,10 +25,10 @@ impl TestHandler {
         Ok("GET /test received! Another line for test.".to_string())
     }
 
-    #[get("/test/:id")]
+    #[get("/test/{id}")]
     pub async fn get_test_id(req: Request) -> Result<String, MadenError> {
         let id = req.path_params.get("id").unwrap_or(&"unknown".to_string()).clone();
-        println!("/test/:{id}");
+        println!("/test/{id}");
         Ok(format!("GET /test/{id} received! ID: {id} Path parameter test."))
     }
 
