@@ -28,6 +28,7 @@ impl HttpMethod {
     }
 }
 
+#[derive(Clone)]
 pub struct Request {
     pub method: HttpMethod,
     pub path: String,

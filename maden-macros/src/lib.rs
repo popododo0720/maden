@@ -1,7 +1,7 @@
 use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ImplItem, ItemFn, ItemImpl, LitStr, Type, Ident};
+use syn::{parse_macro_input, ImplItem, ItemFn, ItemImpl, LitStr, Type, Ident, FnArg, Pat, PatType};
 use syn::parse::{Parse, ParseBuffer};
 
 struct HandlerArgs {
@@ -63,15 +63,19 @@ pub fn handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             method.attrs.retain(|attr| {
                 let mut is_handled = false;
-                if attr.path().is_ident("get") || attr.path().is_ident("post") {
+                if attr.path().is_ident("get") || attr.path().is_ident("post") || attr.path().is_ident("put") || attr.path().is_ident("delete") {
                     if let Ok(args) = attr.parse_args::<HandlerArgs>() {
                         path_str = Some(args.path.value());
                         query_str = args.query.map(|q| q.value());
 
                         if attr.path().is_ident("get") {
                             http_method = Some(quote! { maden_core::HttpMethod::Get });
-                        } else {
+                        } else if attr.path().is_ident("post") {
                             http_method = Some(quote! { maden_core::HttpMethod::Post });
+                        } else if attr.path().is_ident("put") {
+                            http_method = Some(quote! { maden_core::HttpMethod::Put });
+                        } else if attr.path().is_ident("delete") {
+                            http_method = Some(quote! { maden_core::HttpMethod::Delete });
                         }
                         is_handled = true;
                     }
@@ -86,10 +90,123 @@ pub fn handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     quote! { None }
                 };
 
+                // Parse function parameters to generate extraction code
+                let mut param_extractions = Vec::new();
+                let mut param_names = Vec::new();
+                let mut path_params = Vec::new();
+
+                // Extract path parameter names from the route path
+                let path_param_names: Vec<String> = path.split('/')
+                    .filter_map(|segment| {
+                        if segment.starts_with('{') && segment.ends_with('}') {
+                            Some(segment[1..segment.len()-1].to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                for input in &method.sig.inputs {
+                    if let FnArg::Typed(PatType { pat, ty, .. }) = input {
+                        // Handle different pattern types
+                        match &**pat {
+                            Pat::Ident(pat_ident) => {
+                                let param_name = &pat_ident.ident;
+                                let param_name_str = param_name.to_string();
+                                
+                                // Check if it's the Request type - pass it directly
+                                if let Type::Path(type_path) = &**ty {
+                                    let type_name = &type_path.path.segments.last().unwrap().ident;
+                                    
+                                    if type_name == "Request" {
+                                        // Pass Request directly
+                                        param_extractions.push(quote! {
+                                            let #param_name = req.clone();
+                                        });
+                                        param_names.push(param_name.clone());
+                                        continue;
+                                    }
+                                }
+                                
+                                // Check if this parameter matches a path parameter
+                                if path_param_names.contains(&param_name_str) {
+                                    // This is a path parameter - extract it directly
+                                    path_params.push(param_name.clone());
+                                    param_extractions.push(quote! {
+                                        let #param_name = maden_core::extract_path_param::<#ty>(&req, #param_name_str)?;
+                                    });
+                                    param_names.push(param_name.clone());
+                                } else {
+                                    // Check if it's a wrapper type (Path, Query, Json)
+                                    if let Type::Path(type_path) = &**ty {
+                                        let type_name = &type_path.path.segments.last().unwrap().ident;
+                                        
+                                        if type_name == "Path" || type_name == "Query" || type_name == "Json" {
+                                            // Extract using FromRequest trait
+                                            param_extractions.push(quote! {
+                                                let #param_name = <#ty as maden_core::FromRequest>::from_request(&req).await?;
+                                            });
+                                            param_names.push(param_name.clone());
+                                        } else {
+                                            // Try to extract as JSON body for custom types
+                                            param_extractions.push(quote! {
+                                                let #param_name = {
+                                                    let body_str = String::from_utf8(req.body.clone())
+                                                        .map_err(|e| maden_core::MadenError::bad_request(format!("Invalid UTF-8 in request body: {}", e)))?;
+                                                    serde_json::from_str::<#ty>(&body_str)
+                                                        .map_err(|e| maden_core::MadenError::bad_request(format!("Failed to parse JSON body: {}", e)))?
+                                                };
+                                            });
+                                            param_names.push(param_name.clone());
+                                        }
+                                    } else {
+                                        // For other types, try to parse as JSON body
+                                        param_extractions.push(quote! {
+                                            let #param_name = {
+                                                let body_str = String::from_utf8(req.body.clone())
+                                                    .map_err(|e| maden_core::MadenError::bad_request(format!("Invalid UTF-8 in request body: {}", e)))?;
+                                                serde_json::from_str::<#ty>(&body_str)
+                                                    .map_err(|e| maden_core::MadenError::bad_request(format!("Failed to parse JSON body: {}", e)))?
+                                            };
+                                        });
+                                        param_names.push(param_name.clone());
+                                    }
+                                }
+                            },
+                            Pat::TupleStruct(tuple_struct) => {
+                                // Handle patterns like Query(query), Json(data), Path(params)
+                                if let Some(wrapper_name) = tuple_struct.path.segments.last() {
+                                    let wrapper_ident = &wrapper_name.ident;
+                                    
+                                    if wrapper_ident == "Query" || wrapper_ident == "Json" || wrapper_ident == "Path" {
+                                        // Extract the inner variable name
+                                        if let Some(Pat::Ident(inner_pat)) = tuple_struct.elems.first() {
+                                            let inner_name = &inner_pat.ident;
+                                            
+                                            // Extract using FromRequest trait
+                                            param_extractions.push(quote! {
+                                                let #wrapper_ident(#inner_name) = <#ty as maden_core::FromRequest>::from_request(&req).await?;
+                                            });
+                                            param_names.push(inner_name.clone());
+                                        }
+                                    }
+                                }
+                            },
+                            _ => {
+                                // Handle other pattern types if needed
+                            }
+                        }
+                    }
+                }
+
                 let return_type = &method.sig.output;
                 let response_conversion = match return_type {
                     syn::ReturnType::Default => { // -> ()
-                        quote! { Ok(().into_response()) }
+                        quote! { 
+                            #(#param_extractions)*
+                            #struct_name::#method_name(#(#param_names),*).await;
+                            Ok(maden_core::Response::new(200))
+                        }
                     },
                     syn::ReturnType::Type(_, ty) => { // -> Type
                         if let Type::Path(type_path) = &**ty {
@@ -97,35 +214,39 @@ pub fn handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             let type_name = &last_segment.ident;
 
                             if type_name == "Response" {
-                                quote! { #struct_name::#method_name(req).await }
+                                quote! { 
+                                    #(#param_extractions)*
+                                    Ok(#struct_name::#method_name(#(#param_names),*).await)
+                                }
                             } else if type_name == "String" {
-                                quote! { maden_core::Response::new(200).text(&#struct_name::#method_name(req).await) }
-                            } else if type_name == "str" {
-                                quote! { maden_core::Response::new(200).text(#struct_name::#method_name(req).await) }
+                                quote! { 
+                                    #(#param_extractions)*
+                                    let result = #struct_name::#method_name(#(#param_names),*).await;
+                                    Ok(maden_core::Response::new(200).text(&result))
+                                }
                             } else if type_name == "Result" {
-                                let _inner_type = if let syn::PathArguments::AngleBracketed(args) = &type_path.path.segments.last().unwrap().arguments {
-                                    if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                        inner_ty
-                                    } else {
-                                        panic!("Expected a type argument for Result");
-                                    }
-                                } else {
-                                    panic!("Expected angle bracketed arguments for Result");
-                                };
-
                                 quote! {
-                                    match #struct_name::#method_name(req).await {
-                                        Ok(value) => maden_core::Response::new(200).json(value),
-                                        Err(err) => err.into_response(),
+                                    #(#param_extractions)*
+                                    match #struct_name::#method_name(#(#param_names),*).await {
+                                        Ok(value) => Ok(maden_core::Response::new(200).json(value)),
+                                        Err(err) => Ok(err.into_response()),
                                     }
                                 }
                             } else {
                                 // Assume it's a serializable type
-                                quote! { maden_core::Response::new(200).json(#struct_name::#method_name(req).await) }
+                                quote! { 
+                                    #(#param_extractions)*
+                                    let result = #struct_name::#method_name(#(#param_names),*).await;
+                                    Ok(maden_core::Response::new(200).json(result))
+                                }
                             }
                         } else {
-                            // Fallback for other complex types or impl Trait
-                            quote! { maden_core::Response::new(200).json(#struct_name::#method_name(req).await) }
+                            // Fallback for other complex types
+                            quote! { 
+                                #(#param_extractions)*
+                                let result = #struct_name::#method_name(#(#param_names),*).await;
+                                Ok(maden_core::Response::new(200).json(result))
+                            }
                         }
                     }
                 };
@@ -135,7 +256,16 @@ pub fn handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         #http_method,
                         &#path,
                         #query_arg,
-                        Box::new(|req| Box::pin(async move { #response_conversion })),
+                        Box::new(|req| Box::pin(async move { 
+                            let result: Result<maden_core::Response, maden_core::MadenError> = async {
+                                #response_conversion
+                            }.await;
+                            
+                            match result {
+                                Ok(response) => response,
+                                Err(error) => error.into_response(),
+                            }
+                        })),
                     );
                 });
             }
@@ -170,6 +300,16 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
+#[proc_macro_attribute]
+pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
+#[proc_macro_attribute]
+pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
